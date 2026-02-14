@@ -31,7 +31,7 @@ namespace SPRK.Backend.Data{
                     Location = "Gedung D3, HH 101",
                     Description = "Lengkap dengan proyektor dan sound system",
                     IsAvailable = true,
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = new DateTime(2026, 2, 14, 11, 24, 0, DateTimeKind.Utc),
                     IsDeleted = false
                 },
                 new Room
@@ -42,7 +42,7 @@ namespace SPRK.Backend.Data{
                     Location = "Gedung Pascasarjana, Lantai 6",
                     Description = "Lengkap dengan proyektor, sound system, dan kursi empuk",
                     IsAvailable = true,
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = new DateTime(2026, 2, 14, 11, 24, 0, DateTimeKind.Utc),
                     IsDeleted = false
                 },
                 new Room
@@ -53,7 +53,7 @@ namespace SPRK.Backend.Data{
                     Location = "Gedung Pascasarjana, Lantai 6",
                     Description = "Layar, Sound system, dan Ruangan super besar",
                     IsAvailable = true,
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = new DateTime(2026, 2, 14, 11, 24, 0, DateTimeKind.Utc),
                     IsDeleted = false
                 }
             );
