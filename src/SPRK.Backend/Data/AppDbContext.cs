@@ -10,16 +10,21 @@ namespace SPRK.Backend.Data{
         }
 
         public DbSet<Room> Rooms { get; set; } = null!;
+        public DbSet<Booking> Bookings { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            base.OnModelCreating(modelBuilder);
             base.OnModelCreating(modelBuilder);
 
             // --- 1. Konfigurasi Soft Delete Global ---
             // Setiap kali kita query (context.Rooms.ToList()), 
             // EF Core otomatis menambahkan "WHERE IsDeleted = false"
             modelBuilder.Entity<Room>().HasQueryFilter(r => !r.IsDeleted);
+            modelBuilder.Entity<Booking>().HasQueryFilter(b => !b.IsDeleted);
+
+            modelBuilder.Entity<Booking>()
+                .Property(b => b.Status)
+                .HasDefaultValue(BookingStatus.Pending);
 
             // --- 2. Data Seeding (Data Dummy Awal) ---
             modelBuilder.Entity<Room>().HasData(
@@ -37,7 +42,7 @@ namespace SPRK.Backend.Data{
                 new Room
                 {
                     Id = 2,
-                    Name = "Ruang D4 Theater",
+                    Name = "Ruang Theater Pascasarjana",
                     Capacity = 90,
                     Location = "Gedung Pascasarjana, Lantai 6",
                     Description = "Lengkap dengan proyektor, sound system, dan kursi empuk",

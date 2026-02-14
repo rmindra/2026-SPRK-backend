@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SPRK.Backend.Data;
 
@@ -11,9 +12,11 @@ using SPRK.Backend.Data;
 namespace SPRK.Backend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260214142058_AddBookingTable")]
+    partial class AddBookingTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -56,9 +59,7 @@ namespace SPRK.Backend.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<int>("Status")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0);
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -125,7 +126,7 @@ namespace SPRK.Backend.Migrations
                             IsAvailable = true,
                             IsDeleted = false,
                             Location = "Gedung Pascasarjana, Lantai 6",
-                            Name = "Ruang Theater Pascasarjana"
+                            Name = "Ruang D4 Theater"
                         },
                         new
                         {
