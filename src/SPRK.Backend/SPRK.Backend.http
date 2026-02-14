@@ -1,6 +1,0 @@
-@SPRK.Backend_HostAddress = http://localhost:5006
-
-GET {{SPRK.Backend_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
