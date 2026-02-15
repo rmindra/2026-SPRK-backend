@@ -134,10 +134,46 @@ public class BookingsController : ControllerBase
         booking.Purpose = dto.Purpose;
         booking.StartTime = dto.StartTime;
         booking.EndTime = dto.EndTime;
-        booking.Status = dto.Status;
 
         await _context.SaveChangesAsync();
         return Ok(new { message = "Booking berhasil diupdate" });
+    }
+
+    [HttpPatch("{id}/status")]
+    public async Task<IActionResult> UpdateStatus(int id, [FromBody] BookingUpdateStatusDto dto)
+    {
+        // 1. Ambil Data Booking
+        var booking = await _context.Bookings.FindAsync(id);
+        if (booking == null) return NotFound("Data peminjaman tidak ditemukan.");
+
+        // 2. Validasi Transisi Status (Tidak boleh ubah jika sudah final)
+        if (booking.Status == BookingStatus.Cancelled || booking.Status == BookingStatus.Rejected)
+        {
+            return BadRequest("Tidak dapat mengubah status peminjaman yang sudah Dibatalkan atau Ditolak.");
+        }
+
+        // 3. Logic Check: Cek Konflik sebelum Approve
+        if (dto.Status == BookingStatus.Approved)
+        {
+            bool isConflict = await _context.Bookings.AnyAsync(b =>
+                b.Id != id &&                         // Abaikan booking diri sendiri
+                b.RoomId == booking.RoomId &&         // Ruangan sama
+                b.Status == BookingStatus.Approved && // Status lawan sudah Approved
+                b.StartTime < booking.EndTime &&      // Cek Overlap Waktu
+                b.EndTime > booking.StartTime
+            );
+
+            if (isConflict)
+            {
+                return Conflict("Gagal menyetujui: Sudah ada jadwal lain yang Disetujui (Approved) pada jam tersebut.");
+            }
+        }
+
+        // 4. Simpan Perubahan
+        booking.Status = dto.Status;
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Status berhasil diperbarui" });
     }
 
     [HttpDelete("{id}")]
