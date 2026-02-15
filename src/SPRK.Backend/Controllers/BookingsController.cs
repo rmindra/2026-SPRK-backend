@@ -13,12 +13,44 @@ public class BookingsController : ControllerBase
     public BookingsController(AppDbContext context) => _context = context;
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<BookingResponseDto>>> GetBookings()
+    public async Task<ActionResult<IEnumerable<BookingResponseDto>>> GetBookings([FromQuery] BookingFilterDto? filter)
     {
-        var bookings = await _context.Bookings
-        .Include(b => b.Room)
-        .OrderBy(b => b.StartTime)
-        .ToListAsync();
+        filter ??= new BookingFilterDto();
+
+        var query = _context.Bookings
+            .Include(b => b.Room)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(filter.BorrowerName))
+        {
+            query = query.Where(b => b.BorrowerName.Contains(filter.BorrowerName));
+        }
+
+        if (filter.RoomId.HasValue)
+        {
+            query = query.Where(b => b.RoomId == filter.RoomId.Value);
+        }
+
+        if (filter.Status.HasValue)
+        {
+            query = query.Where(b => b.Status == filter.Status.Value);
+        }
+
+        if (filter.Date.HasValue)
+        {
+            var dateOnly = filter.Date.Value.Date;
+            query = query.Where(b => b.StartTime.Date == dateOnly);
+        }
+
+        query = (filter.SortBy ?? "DateDesc").ToLowerInvariant() switch
+        {
+            "dateasc" => query.OrderBy(b => b.StartTime),
+            "nameasc" => query.OrderBy(b => b.BorrowerName),
+            "namedesc" => query.OrderByDescending(b => b.BorrowerName),
+            _ => query.OrderByDescending(b => b.StartTime)
+        };
+
+        var bookings = await query.ToListAsync();
 
         var result = bookings.Select(b => new BookingResponseDto
         {
@@ -146,12 +178,12 @@ public class BookingsController : ControllerBase
         var booking = await _context.Bookings.FindAsync(id);
         if (booking == null) return NotFound("Data peminjaman tidak ditemukan.");
 
+        // 2. Validasi Status
         if (!Enum.IsDefined(typeof(BookingStatus), dto.Status))
         {
             return BadRequest("Status tidak valid.");
         }
 
-        // 2. Validasi Transisi Status (Tidak boleh ubah jika sudah final)
         if (booking.Status == BookingStatus.Cancelled || booking.Status == BookingStatus.Rejected)
         {
             return BadRequest("Tidak dapat mengubah status peminjaman yang sudah Dibatalkan atau Ditolak.");

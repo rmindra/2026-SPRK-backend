@@ -24,6 +24,15 @@ namespace SPRK.Backend.DTOs
         public BookingStatus Status { get; set; }
     }
 
+    public class BookingFilterDto
+    {
+        public string? BorrowerName { get; set; }
+        public int? RoomId { get; set; }
+        public BookingStatus? Status { get; set; } // Menggunakan Enum agar type-safe
+        public DateTime? Date { get; set; } // Filter per tanggal spesifik
+        public string? SortBy { get; set; } // DateDesc (default), DateAsc, NameAsc, NameDesc
+    }
+
     public class BookingResponseDto
     {
         public int Id { get; set; }
