@@ -15,9 +15,14 @@ namespace SPRK.Backend.DTOs
         [Required, MaxLength(150)] string BorrowerName,
         [Required, MaxLength(500)] string Purpose,
         [Required] DateTime StartTime,
-        [Required] DateTime EndTime,
-        BookingStatus Status
+        [Required] DateTime EndTime
     );
+
+    public class BookingUpdateStatusDto
+    {
+        [Required]
+        public BookingStatus Status { get; set; }
+    }
 
     public class BookingResponseDto
     {
