@@ -146,6 +146,11 @@ public class BookingsController : ControllerBase
         var booking = await _context.Bookings.FindAsync(id);
         if (booking == null) return NotFound("Data peminjaman tidak ditemukan.");
 
+        if (!Enum.IsDefined(typeof(BookingStatus), dto.Status))
+        {
+            return BadRequest("Status tidak valid.");
+        }
+
         // 2. Validasi Transisi Status (Tidak boleh ubah jika sudah final)
         if (booking.Status == BookingStatus.Cancelled || booking.Status == BookingStatus.Rejected)
         {
@@ -173,7 +178,7 @@ public class BookingsController : ControllerBase
         booking.Status = dto.Status;
         await _context.SaveChangesAsync();
 
-        return Ok(new { message = "Status berhasil diperbarui" });
+        return Ok(new { message = "Status berhasil diperbarui", status = booking.Status });
     }
 
     [HttpDelete("{id}")]
