@@ -62,6 +62,57 @@ namespace SPRK.Backend.Data{
                     IsDeleted = false
                 }
             );
+
+            modelBuilder.Entity<Booking>().HasData(
+                new Booking
+                {
+                    Id = 1,
+                    RoomId = 1,
+                    BorrowerName = "Andi Setiawan",
+                    Purpose = "Seminar internal",
+                    StartTime = new DateTime(2026, 2, 18, 2, 0, 0, DateTimeKind.Utc),
+                    EndTime = new DateTime(2026, 2, 18, 4, 0, 0, DateTimeKind.Utc),
+                    Status = BookingStatus.Rejected,
+                    CreatedAt = new DateTime(2026, 2, 14, 12, 0, 0, DateTimeKind.Utc),
+                    IsDeleted = false
+                },
+                new Booking
+                {
+                    Id = 2,
+                    RoomId = 2,
+                    BorrowerName = "Rina Kurnia",
+                    Purpose = "Pelatihan lab",
+                    StartTime = new DateTime(2026, 2, 19, 6, 30, 0, DateTimeKind.Utc),
+                    EndTime = new DateTime(2026, 2, 19, 9, 0, 0, DateTimeKind.Utc),
+                    Status = BookingStatus.Pending,
+                    CreatedAt = new DateTime(2026, 2, 14, 12, 30, 0, DateTimeKind.Utc),
+                    IsDeleted = false
+                },
+                new Booking
+                {
+                    Id = 3,
+                    RoomId = 3,
+                    BorrowerName = "Dosen TI",
+                    Purpose = "Kuliah umum",
+                    StartTime = new DateTime(2026, 2, 20, 1, 0, 0, DateTimeKind.Utc),
+                    EndTime = new DateTime(2026, 2, 20, 3, 0, 0, DateTimeKind.Utc),
+                    Status = BookingStatus.Approved,
+                    CreatedAt = new DateTime(2026, 2, 14, 13, 0, 0, DateTimeKind.Utc),
+                    IsDeleted = false
+                },
+                new Booking
+                {
+                    Id = 4,
+                    RoomId = 1,
+                    BorrowerName = "Mahasiswa TI",
+                    Purpose = "Diskusi tugas akhir",
+                    StartTime = new DateTime(2026, 2, 21, 10, 0, 0, DateTimeKind.Utc),
+                    EndTime = new DateTime(2026, 2, 21, 12, 0, 0, DateTimeKind.Utc),
+                    Status = BookingStatus.Cancelled,
+                    CreatedAt = new DateTime(2026, 2, 14, 14, 0, 0, DateTimeKind.Utc),
+                    IsDeleted = false
+                }
+            );
         }
     }
 }
