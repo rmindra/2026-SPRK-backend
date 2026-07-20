@@ -112,7 +112,6 @@ Swagger UI available at **http://localhost:5006/swagger**
 
 ---
 
-
 ## Running via Docker (recommended)
 
 Use the infrastructure repo to launch everything together:
@@ -143,7 +142,7 @@ Set via `appsettings.json` / `appsettings.Development.json`, or overridden at ru
 
 - **PostgreSQL via Npgsql**: Uses `Npgsql.EntityFrameworkCore.PostgreSQL` provider — cross-platform, no Windows dependency.
 - **Soft Delete**: `Room` and `Booking` have an `IsDeleted` flag. A global EF query filter automatically excludes deleted records.
-- **Auto-Migration on Startup**: In `Development` mode, `Program.cs` creates the database (via `pg_database` check) and runs all pending migrations automatically, with retry logic for Docker cold-starts.
+- **Auto-Migration on Startup**: `Program.cs` always runs EF Core migrations on every startup regardless of environment. It attempts to create the database (safely ignores if already exists) then applies all pending migrations, with retry logic for Docker cold-starts.
 - **Overlap Detection**: `POST` and `PUT` bookings check for time overlap with existing non-rejected/cancelled bookings.
 - **Conflict Check on Approve**: `PATCH /status` checks for approved booking conflicts before allowing `Approved`.
 
