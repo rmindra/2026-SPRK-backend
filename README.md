@@ -1,6 +1,6 @@
 # 2026-SPRK Backend
 
-API backend untuk **Sistem Peminjaman Ruangan Kampus (SPRK)**, dibangun dengan **ASP.NET Core** menggunakan **Entity Framework Core** dan **SQL Server**.
+API backend untuk **Sistem Peminjaman Ruangan Kampus (SPRK)**, dibangun dengan **ASP.NET Core** menggunakan **Entity Framework Core** dan **PostgreSQL**.
 
 ---
 
@@ -9,8 +9,8 @@ API backend untuk **Sistem Peminjaman Ruangan Kampus (SPRK)**, dibangun dengan *
 | Layer         | Technology                                      |
 |---------------|-------------------------------------------------|
 | Framework     | ASP.NET Core (.NET 10)                          |
-| ORM           | Entity Framework Core 10 (Code-First)           |
-| Database      | Microsoft SQL Server 2022                       |
+| ORM           | Entity Framework Core 10 (Code-First, Npgsql)   |
+| Database      | PostgreSQL 16                                   |
 | API Docs      | Swagger / OpenAPI (Swashbuckle)                 |
 | Containerization | Docker (multi-stage build)                   |
 
@@ -31,7 +31,7 @@ src/SPRK.Backend/
 │   └── Booking.cs             ← Entity Booking (status enum, soft delete)
 ├── Data/
 │   └── AppDbContext.cs        ← DbContext, global query filter, data seeding
-├── Migrations/                ← EF Core migration files
+├── Migrations/                ← EF Core migration files (generated, PostgreSQL-specific)
 ├── Properties/
 │   └── launchSettings.json    ← Local dev launch settings (port 5006)
 ├── appsettings.json           ← Base config (connection string, CORS, logging)
@@ -45,41 +45,51 @@ src/SPRK.Backend/
 
 ### Rooms — `/api/Rooms`
 
-| Method | Route             | Description                    |
-|--------|-------------------|--------------------------------|
+| Method | Route             | Description                          |
+|--------|-------------------|--------------------------------------|
 | GET    | `/api/Rooms`      | Get all rooms (soft-delete filtered) |
-| GET    | `/api/Rooms/{id}` | Get room by ID                 |
-| POST   | `/api/Rooms`      | Create new room                |
-| PUT    | `/api/Rooms/{id}` | Update room                    |
-| DELETE | `/api/Rooms/{id}` | Soft-delete room               |
+| GET    | `/api/Rooms/{id}` | Get room by ID                       |
+| POST   | `/api/Rooms`      | Create new room                      |
+| PUT    | `/api/Rooms/{id}` | Update room                          |
+| DELETE | `/api/Rooms/{id}` | Soft-delete room                     |
 
 ### Bookings — `/api/Bookings`
 
-| Method | Route                       | Description                                    |
-|--------|-----------------------------|------------------------------------------------|
-| GET    | `/api/Bookings`             | Get bookings (supports filter + sort via query) |
-| GET    | `/api/Bookings/{id}`        | Get booking by ID                              |
-| POST   | `/api/Bookings`             | Create new booking (conflict check)            |
-| PUT    | `/api/Bookings/{id}`        | Update booking details (conflict check)        |
-| PATCH  | `/api/Bookings/{id}/status` | Update booking status                          |
-| DELETE | `/api/Bookings/{id}`        | Soft-delete booking                            |
+| Method | Route                       | Description                                     |
+|--------|-----------------------------|--------------------------------------------------|
+| GET    | `/api/Bookings`             | Get bookings (supports filter + sort via query)  |
+| GET    | `/api/Bookings/{id}`        | Get booking by ID                                |
+| POST   | `/api/Bookings`             | Create new booking (overlap check)               |
+| PUT    | `/api/Bookings/{id}`        | Update booking details (overlap check)           |
+| PATCH  | `/api/Bookings/{id}/status` | Update booking status                            |
+| DELETE | `/api/Bookings/{id}`        | Soft-delete booking                              |
 
 #### Booking Filter Query Params (`GET /api/Bookings`)
-| Param          | Type   | Description                                     |
-|----------------|--------|-------------------------------------------------|
-| `borrowerName` | string | Filter by partial borrower name                 |
-| `roomId`       | int    | Filter by room ID                               |
-| `status`       | string | `Pending`, `Approved`, `Rejected`, `Cancelled`  |
-| `date`         | date   | Filter by specific date (matches `startTime`)   |
-| `sortBy`       | string | `DateDesc` (default), `DateAsc`, `NameAsc`, `NameDesc` |
+
+| Param          | Type   | Description                                           |
+|----------------|--------|-------------------------------------------------------|
+| `borrowerName` | string | Filter by partial borrower name                       |
+| `roomId`       | int    | Filter by room ID                                     |
+| `status`       | string | `Pending`, `Approved`, `Rejected`, `Cancelled`        |
+| `date`         | date   | Filter by specific date (matches `startTime`)         |
+| `sortBy`       | string | `DateDesc` (default), `DateAsc`, `NameAsc`, `NameDesc`|
 
 ---
 
 ## Running Locally (without Docker)
 
 ### Prerequisites
+
 - .NET 10 SDK
-- SQL Server running locally (or use Docker: `docker run -e ACCEPT_EULA=Y -e SA_PASSWORD=YourStrong!Passw0rd -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest`)
+- PostgreSQL 16 running locally
+
+  Quick way to run PostgreSQL via Docker:
+  ```bash
+  docker run -d --name sprk-pg \
+    -e POSTGRES_PASSWORD=YourStrong!Passw0rd \
+    -p 5432:5432 \
+    postgres:16-alpine
+  ```
 
 ### Setup
 
@@ -87,16 +97,22 @@ src/SPRK.Backend/
 # 1. Navigate to the project
 cd src/SPRK.Backend
 
-# 2. Copy/edit dev settings
-#    appsettings.Development.json is already committed as a template.
-#    Update the connection string if your SQL Server uses different credentials.
+# 2. Review / edit appsettings.Development.json
+#    Update the connection string if your PostgreSQL uses different credentials.
 
-# 3. Run (auto-creates DB and runs migrations on first start)
+# 3. Generate EF Core migrations (REQUIRED after first clone or DB switch)
+dotnet ef migrations add InitialCreate
+
+# 4. Run (auto-creates DB and applies migrations on startup)
 dotnet run
 ```
 
-API runs at **http://localhost:5006**.
-Swagger UI available at **http://localhost:5006/swagger**.
+API runs at **http://localhost:5006**  
+Swagger UI available at **http://localhost:5006/swagger**
+
+> **Important:** The `Migrations/` folder is empty after a fresh clone.
+> You **must** run `dotnet ef migrations add InitialCreate` before the first `dotnet run`.
+> When running via Docker (`make dev`), this is handled automatically.
 
 ---
 
@@ -115,23 +131,24 @@ See [`2026-SPRK-infrastructure/README.md`](../2026-SPRK-infrastructure/README.md
 
 ## Environment Variables
 
-These are set via `appsettings.json` / `appsettings.Development.json` or overridden at runtime by Docker Compose:
+Set via `appsettings.json` / `appsettings.Development.json`, or overridden at runtime by Docker Compose:
 
-| Variable                                   | Default                                     | Description                      |
-|--------------------------------------------|---------------------------------------------|----------------------------------|
-| `ConnectionStrings__DefaultConnection`     | `Server=localhost,1433;Database=SPRK;...`   | SQL Server connection string     |
-| `ASPNETCORE_ENVIRONMENT`                   | `Development`                               | Environment name                 |
-| `ASPNETCORE_URLS`                          | `http://localhost:5006`                     | Bind address & port              |
-| `Cors__AllowedOrigins__0`                  | `http://localhost:5173`                     | First allowed CORS origin        |
+| Variable                               | Default (local)                                                    | Description                  |
+|----------------------------------------|--------------------------------------------------------------------|------------------------------|
+| `ConnectionStrings__DefaultConnection` | `Host=localhost;Port=5432;Database=SPRK;Username=postgres;Password=...` | PostgreSQL connection string |
+| `ASPNETCORE_ENVIRONMENT`               | `Development`                                                      | Environment name             |
+| `ASPNETCORE_URLS`                      | `http://localhost:5006`                                            | Bind address & port          |
+| `Cors__AllowedOrigins__0`              | `http://localhost:5173`                                            | First allowed CORS origin    |
 
 ---
 
 ## Key Design Decisions
 
-- **Soft Delete**: `Room` and `Booking` entities have an `IsDeleted` flag. A global EF query filter automatically excludes deleted records from all standard queries.
-- **Auto-Migration on Startup**: In `Development` mode, `Program.cs` creates the database and runs all pending migrations automatically on startup (with retry logic for Docker cold-starts).
-- **Overlap Detection**: `POST /api/Bookings` and `PUT /api/Bookings/{id}` check for time overlap with existing non-rejected/cancelled bookings before saving.
-- **Conflict Check on Approve**: `PATCH /api/Bookings/{id}/status` checks for approved booking conflicts before allowing a status change to `Approved`.
+- **PostgreSQL via Npgsql**: Uses `Npgsql.EntityFrameworkCore.PostgreSQL` provider — cross-platform, no Windows dependency.
+- **Soft Delete**: `Room` and `Booking` have an `IsDeleted` flag. A global EF query filter automatically excludes deleted records.
+- **Auto-Migration on Startup**: In `Development` mode, `Program.cs` creates the database (via `pg_database` check) and runs all pending migrations automatically, with retry logic for Docker cold-starts.
+- **Overlap Detection**: `POST` and `PUT` bookings check for time overlap with existing non-rejected/cancelled bookings.
+- **Conflict Check on Approve**: `PATCH /status` checks for approved booking conflicts before allowing `Approved`.
 
 ---
 

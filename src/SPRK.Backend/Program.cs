@@ -1,16 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using SPRK.Backend.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Ambil Connection String dari appsettings.json
+// 1. Ambil Connection String dari config / environment variable
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-// 2. Daftarkan DbContext ke Dependency Injection Container
+// 2. Daftarkan DbContext dengan PostgreSQL provider
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(connectionString)
+    options.UseNpgsql(connectionString)
 );
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
@@ -40,62 +40,70 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-    
+
     // Ensure database created dan jalankan migration
     using (var scope = app.Services.CreateScope())
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    var dbConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-        
-        // Parse connection string untuk dapatkan server dan database name
-    var builderConn = new SqlConnectionStringBuilder(dbConnectionString);
-        var server = builderConn.DataSource;
-        var databaseName = builderConn.InitialCatalog ?? "SPRK";
-        var userId = builderConn.UserID;
-        var password = builderConn.Password;
-        
-        // Buat connection string ke master database (tanpa specify database)
-        var masterConnectionString = $"Server={server};User Id={userId};Password={password};TrustServerCertificate=True;";
-        
-        // Retry logic: SQL Server mungkin belum ready saat container pertama start
+        var dbConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+        // Parse connection string untuk dapatkan host dan database name
+        var connBuilder = new NpgsqlConnectionStringBuilder(dbConnectionString);
+        var host     = connBuilder.Host;
+        var port     = connBuilder.Port;
+        var dbName   = connBuilder.Database ?? "SPRK";
+        var username = connBuilder.Username;
+        var password = connBuilder.Password;
+
+        // Connect ke database default "postgres" untuk create DB jika belum ada
+        var masterConnStr = $"Host={host};Port={port};Username={username};Password={password};Database=postgres";
+
+        // Retry logic: PostgreSQL container mungkin belum ready saat pertama start
         int maxRetries = 10;
-        int delayMs = 2000;
-        bool databaseCreated = false;
-        
+        int delayMs    = 2000;
+
         for (int i = 0; i < maxRetries; i++)
         {
             try
             {
-                // Step 1: Create database jika belum ada (connect ke master)
-                using (var masterConn = new SqlConnection(masterConnectionString))
+                // Step 1: Buat database jika belum ada
+                using (var masterConn = new NpgsqlConnection(masterConnStr))
                 {
                     masterConn.Open();
-                    var createDbCommand = new SqlCommand(
-                        $@"IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '{databaseName}')
-                           BEGIN
-                               CREATE DATABASE [{databaseName}];
-                           END", masterConn);
-                    createDbCommand.ExecuteNonQuery();
-                    databaseCreated = true;
-                    logger.LogInformation("Database {DatabaseName} ensured.", databaseName);
+                    var checkCmd = new NpgsqlCommand(
+                        $"SELECT 1 FROM pg_database WHERE datname = '{dbName.ToLowerInvariant()}'",
+                        masterConn);
+                    var exists = checkCmd.ExecuteScalar();
+
+                    if (exists == null)
+                    {
+                        var createCmd = new NpgsqlCommand($"CREATE DATABASE \"{dbName}\"", masterConn);
+                        createCmd.ExecuteNonQuery();
+                        logger.LogInformation("Database {DatabaseName} created.", dbName);
+                    }
+                    else
+                    {
+                        logger.LogInformation("Database {DatabaseName} already exists.", dbName);
+                    }
                 }
-                
-                // Step 2: Migrate database (connect ke SPRK)
-                if (databaseCreated)
-                {
-                    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                    dbContext.Database.Migrate();
-                    logger.LogInformation("Database migrations applied successfully.");
-                    break;
-                }
+
+                // Step 2: Jalankan EF Core migrations
+                var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                dbContext.Database.Migrate();
+                logger.LogInformation("Database migrations applied successfully.");
+                break;
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Attempt {Attempt}/{MaxRetries}: Failed to create/migrate database. Retrying in {Delay}ms...", i + 1, maxRetries, delayMs);
-                
+                logger.LogWarning(ex,
+                    "Attempt {Attempt}/{MaxRetries}: Failed to create/migrate database. Retrying in {Delay}ms...",
+                    i + 1, maxRetries, delayMs);
+
                 if (i == maxRetries - 1)
                 {
-                    logger.LogError(ex, "Failed to create/migrate database after {MaxRetries} attempts. Application will continue but database may not be ready.", maxRetries);
+                    logger.LogError(ex,
+                        "Failed to create/migrate database after {MaxRetries} attempts. Application will continue but database may not be ready.",
+                        maxRetries);
                 }
                 else
                 {
