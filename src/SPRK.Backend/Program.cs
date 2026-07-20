@@ -35,19 +35,16 @@ builder.Services.AddControllers()
 
 var app = builder.Build();
 
-// Always expose Swagger (useful inside Docker for quick API testing)
+// Swagger selalu aktif (berguna saat testing di Docker)
 app.UseSwagger();
 app.UseSwaggerUI();
 
 // ─── Auto-create database dan jalankan migrations saat startup ───────────────
-// Retry logic: PostgreSQL container mungkin belum fully ready saat backend start.
-// Jika semua retry habis dan masih gagal, aplikasi CRASH (terlihat jelas di docker logs).
 using (var scope = app.Services.CreateScope())
 {
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     var dbConnectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
 
-    // Parse connection string untuk mendapatkan komponen host & database
     var connBuilder = new NpgsqlConnectionStringBuilder(dbConnectionString);
     var host     = connBuilder.Host;
     var port     = connBuilder.Port;
@@ -55,7 +52,7 @@ using (var scope = app.Services.CreateScope())
     var username = connBuilder.Username;
     var password = connBuilder.Password;
 
-    // Gunakan database default "postgres" untuk create app DB jika belum ada
+    // Connect ke database default "postgres" untuk ensure DB app exists
     var masterConnStr = $"Host={host};Port={port};Username={username};Password={password};Database=postgres";
 
     int maxRetries = 15;
@@ -68,26 +65,21 @@ using (var scope = app.Services.CreateScope())
     {
         try
         {
-            // Step 1: Buat database jika belum ada
+            // Step 1: Pastikan database ada.
+            // Langsung coba CREATE — jika sudah ada (42P04), tangkap dan lanjut.
+            // Ini lebih robust daripada SELECT lalu CREATE (menghindari race condition & case sensitivity).
             using (var masterConn = new NpgsqlConnection(masterConnStr))
             {
                 masterConn.Open();
-
-                using var checkCmd = new NpgsqlCommand(
-                    "SELECT 1 FROM pg_database WHERE datname = $1",
-                    masterConn);
-                checkCmd.Parameters.AddWithValue(dbName.ToLowerInvariant());
-                var exists = checkCmd.ExecuteScalar();
-
-                if (exists == null)
+                try
                 {
-                    // CREATE DATABASE tidak support parameterized query — nama DB sudah di-validate
                     using var createCmd = new NpgsqlCommand($"CREATE DATABASE \"{dbName}\"", masterConn);
                     createCmd.ExecuteNonQuery();
                     logger.LogInformation("✔ Database '{DatabaseName}' created.", dbName);
                 }
-                else
+                catch (PostgresException ex) when (ex.SqlState == "42P04")
                 {
+                    // 42P04 = duplicate_database — sudah ada, tidak masalah
                     logger.LogInformation("✔ Database '{DatabaseName}' already exists.", dbName);
                 }
             }
@@ -111,17 +103,16 @@ using (var scope = app.Services.CreateScope())
         }
     }
 
-    // Jika semua retry habis dan masih gagal → crash dengan pesan yang jelas
+    // Jika semua retry habis dan masih gagal → crash dengan jelas di docker logs
     if (lastEx != null)
     {
         logger.LogCritical(lastEx,
-            "❌ FATAL: Could not connect to or migrate the database after {MaxRetries} attempts. " +
-            "Check that PostgreSQL is running and the connection string is correct. " +
-            "Connection string: {ConnectionString}",
+            "❌ FATAL: Could not initialize database after {MaxRetries} attempts. " +
+            "Check PostgreSQL is running and connection string is correct. " +
+            "ConnectionString: {ConnectionString}",
             maxRetries, dbConnectionString);
         throw new InvalidOperationException(
-            $"Database initialization failed after {maxRetries} attempts. See logs above for details.",
-            lastEx);
+            $"Database initialization failed after {maxRetries} attempts.", lastEx);
     }
 }
 // ─────────────────────────────────────────────────────────────────────────────
