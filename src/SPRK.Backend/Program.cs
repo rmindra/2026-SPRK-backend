@@ -35,19 +35,19 @@ builder.Services.AddControllers()
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// Always expose Swagger (useful inside Docker for quick API testing)
+app.UseSwagger();
+app.UseSwaggerUI();
 
-// Ensure database created dan jalankan migration pada saat startup
+// ─── Auto-create database dan jalankan migrations saat startup ───────────────
+// Retry logic: PostgreSQL container mungkin belum fully ready saat backend start.
+// Jika semua retry habis dan masih gagal, aplikasi CRASH (terlihat jelas di docker logs).
 using (var scope = app.Services.CreateScope())
 {
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    var dbConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    var dbConnectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
 
-    // Parse connection string untuk dapatkan host dan database name
+    // Parse connection string untuk mendapatkan komponen host & database
     var connBuilder = new NpgsqlConnectionStringBuilder(dbConnectionString);
     var host     = connBuilder.Host;
     var port     = connBuilder.Port;
@@ -55,12 +55,14 @@ using (var scope = app.Services.CreateScope())
     var username = connBuilder.Username;
     var password = connBuilder.Password;
 
-    // Connect ke database default "postgres" untuk create DB jika belum ada
+    // Gunakan database default "postgres" untuk create app DB jika belum ada
     var masterConnStr = $"Host={host};Port={port};Username={username};Password={password};Database=postgres";
 
-    // Retry logic: PostgreSQL container mungkin belum ready saat pertama start
-    int maxRetries = 10;
+    int maxRetries = 15;
     int delayMs    = 2000;
+    Exception? lastEx = null;
+
+    logger.LogInformation("Starting database initialization (max {MaxRetries} attempts)...", maxRetries);
 
     for (int i = 0; i < maxRetries; i++)
     {
@@ -70,49 +72,59 @@ using (var scope = app.Services.CreateScope())
             using (var masterConn = new NpgsqlConnection(masterConnStr))
             {
                 masterConn.Open();
-                var checkCmd = new NpgsqlCommand(
-                    $"SELECT 1 FROM pg_database WHERE datname = '{dbName.ToLowerInvariant()}'",
+
+                using var checkCmd = new NpgsqlCommand(
+                    "SELECT 1 FROM pg_database WHERE datname = $1",
                     masterConn);
+                checkCmd.Parameters.AddWithValue(dbName.ToLowerInvariant());
                 var exists = checkCmd.ExecuteScalar();
 
                 if (exists == null)
                 {
-                    var createCmd = new NpgsqlCommand($"CREATE DATABASE \"{dbName}\"", masterConn);
+                    // CREATE DATABASE tidak support parameterized query — nama DB sudah di-validate
+                    using var createCmd = new NpgsqlCommand($"CREATE DATABASE \"{dbName}\"", masterConn);
                     createCmd.ExecuteNonQuery();
-                    logger.LogInformation("Database {DatabaseName} created.", dbName);
+                    logger.LogInformation("✔ Database '{DatabaseName}' created.", dbName);
                 }
                 else
                 {
-                    logger.LogInformation("Database {DatabaseName} already exists.", dbName);
+                    logger.LogInformation("✔ Database '{DatabaseName}' already exists.", dbName);
                 }
             }
 
-            // Step 2: Jalankan EF Core migrations
+            // Step 2: Jalankan semua pending EF Core migrations
             var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             dbContext.Database.Migrate();
-            logger.LogInformation("Database migrations applied successfully.");
+            logger.LogInformation("✔ Database migrations applied successfully.");
+            lastEx = null;
             break;
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex,
-                "Attempt {Attempt}/{MaxRetries}: Failed to create/migrate database. Retrying in {Delay}ms...",
-                i + 1, maxRetries, delayMs);
-
-            if (i == maxRetries - 1)
+            lastEx = ex;
+            if (i < maxRetries - 1)
             {
-                logger.LogError(ex,
-                    "Failed to create/migrate database after {MaxRetries} attempts. Application will continue but database may not be ready.",
-                    maxRetries);
-            }
-            else
-            {
+                logger.LogWarning("  [{Attempt}/{MaxRetries}] DB not ready yet, retrying in {Delay}ms... ({Message})",
+                    i + 1, maxRetries, delayMs, ex.Message);
                 Thread.Sleep(delayMs);
             }
         }
     }
-}
 
+    // Jika semua retry habis dan masih gagal → crash dengan pesan yang jelas
+    if (lastEx != null)
+    {
+        logger.LogCritical(lastEx,
+            "❌ FATAL: Could not connect to or migrate the database after {MaxRetries} attempts. " +
+            "Check that PostgreSQL is running and the connection string is correct. " +
+            "Connection string: {ConnectionString}",
+            maxRetries, dbConnectionString);
+        throw new InvalidOperationException(
+            $"Database initialization failed after {maxRetries} attempts. See logs above for details.",
+            lastEx);
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 app.UseCors();
 
