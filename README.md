@@ -100,21 +100,18 @@ cd src/SPRK.Backend
 # 2. Review / edit appsettings.Development.json
 #    Update the connection string if your PostgreSQL uses different credentials.
 
-# 3. Generate EF Core migrations (REQUIRED after first clone or DB switch)
-dotnet ef migrations add InitialCreate
-
-# 4. Run (auto-creates DB and applies migrations on startup)
+# 3. Run (auto-creates DB and applies migrations on startup)
 dotnet run
 ```
 
 API runs at **http://localhost:5006**  
 Swagger UI available at **http://localhost:5006/swagger**
 
-> **Important:** The `Migrations/` folder is empty after a fresh clone.
-> You **must** run `dotnet ef migrations add InitialCreate` before the first `dotnet run`.
-> When running via Docker (`make dev`), this is handled automatically.
+> **Note:** The initial PostgreSQL migrations (`Migrations/`) are included in the repo.
+> When you start the application (`dotnet run` or `make dev`), it automatically checks, creates the database if missing, and applies all pending migrations.
 
 ---
+
 
 ## Running via Docker (recommended)
 
