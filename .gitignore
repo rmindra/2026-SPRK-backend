@@ -1,5 +1,11 @@
 **/bin/
 **/obj/
 **/.vs/
-**/.env
-**/appsettings.Development.json
+
+# Ignore user-specific secrets override (local only, never commit real secrets)
+# Use appsettings.Development.json for shared dev defaults (it IS committed)
+**/appsettings.*.Local.json
+**/appsettings.Local.json
+
+# User secrets
+**/secrets.json
